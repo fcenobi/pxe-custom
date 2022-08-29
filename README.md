@@ -14,5 +14,5 @@ If you just want to boot your iPXE-enabled system using one of the utilities in
 the menu, you need only navigate to an iPXE shell prompt and issue this command:
 
 ```bash
-chain --autofree https://raw.githubusercontent.com/RogueScholar/netboot.xyz-custom/master/custom.ipxe
+chain --autofree https://raw.githubusercontent.com/fcenobi/pxe-custom/master/custom.ipxe
 ```
