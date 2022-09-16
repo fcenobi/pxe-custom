@@ -1,0 +1,522 @@
+#!ipxe
+console --x 1024 --y 768
+#console --picture http://pxe.fritz.box/splash.png || console --picture http://192.168.99.27:7777/splash.png ||  console --picture https://github.com/fcenobi/pxe-custom/raw/95f00a9ae4bca3ecb8c09933328b5cdae3cbd922/splash.png
+set keymap it
+set spaces1:hex 20
+set spaces2:hex 20:20
+set spaces3:hex 20:20:20
+set spaces4:hex 20:20:20:20
+set space={spaces2}
+set space ${space:string}
+
+set tftp-serve ${next-server}
+set server-name ${66:string}
+set server-weburl    http://${server-name}
+nslookup server-ip ${server-name} && set server-ipurl http://${server-ip}:7777
+set nfs-serverip ${next-server}
+set nfs-mount    /volume6/pxe
+
+
+# Setup some basic convenience variables
+set menu-timeout 5000
+set submenu-timeout ${menu-timeout}
+
+# Ensure we have menu-default set to something
+isset ${menu-default} || set menu-default winpe
+
+######## MAIN MENU ###################
+:start
+menu Welcome to iPXE's Boot Menu
+item
+item --gap -- ------------------------------ Utilities --------------------------------
+item --key 1 winpe	[1] WinPE & Setup
+#item --key 2 diskutilities	[2] Disk Utilities
+#item --key 3 backuprecovery	[3] Backup & Recovery
+#item --key 4 dosprogs	[4] DOS Programs
+item --key 5 livelinux	[5] Linux ISO Live
+#item --key 6 antivirus	[6] Antivirus
+#item --key 7 specialpack	[7] Special Pack
+item --key 8 netboot	[8] netboot
+item --key 8 gitpxecustom	[8] gitpxecustom
+item --key 9 customchain	[9] custom chain
+item --gap -- ------------------------------ Advanced ---------------------------------
+item --key b parametri	[b] Configura parametri
+item --key c config	[c] Configure settings
+item --key s shell	[s] Enter iPXE shell
+isset ${legacy} && item --key l local	[l] Boot from local disk || ###
+item --key r reboot	[r] Restart
+item --key p poweroff	[p] Power Off
+item --key e exit	[e] Exit (boot local disk)
+choose --default winpe --timeout 30000 target && goto ${target}
+
+########## UTILITY ITEMS ####################
+:shell
+echo Type exit to get the back to the menu
+shell
+set menu-timeout 0
+goto start
+
+:failed
+echo Booting failed, dropping to shell
+goto shell
+
+:local
+sanboot --no-describe --drive 0x80 || goto failed  
+goto start
+
+:reboot
+reboot
+
+:poweroff
+poweroff
+
+:exit
+exit
+
+:cancel
+echo You cancelled the menu, dropping you to a shell
+ 
+:config
+config
+goto start
+
+:back
+set submenu-timeout 0
+clear submenu-default
+goto start
+
+:gitpxecustom
+
+chain --autofree https://raw.githubusercontent.com/fcenobi/pxe-custom/master/custom.ipxe  ||  goto start
+boot || goto start
+
+:customchain
+echo -n Insert chustom chain  [chain  ${customchain} ]       && read ${customchain} &&  chian ${customchain} && boot || goto start
+
+:parametri
+set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname}
+set root-path ${iscsirootpath}
+
+menu Parametri [Local IP: ${netX/ip} on ${netX/chip}
+item --gap -- ---  root-path ${iscsirootpath}
+item --gap -- ------------------------------ Iscsi server --------------------------------
+item setserverip             Set IScsi server ip         ${serverip}       
+item setservername           Set IScsi server Name       ${servername}     
+item setiscsiprotocol        Set IScsi protocol          ${iscsiprotocol}  
+item setiscsiport            Set IScsi port              ${iscsiport}      
+item setiscsibootlun         Set IScsi bootlun           ${iscsibootlun}   
+item settargetiqn            Set IScsi target-iqn        ${targetiqn}      
+item settargetname           Set IScsi target name       ${targetname}     
+item --gap -- ------------------------------ Iscsi client --------------------------------
+item setiscsi-initiator-iqn  Set IScsi initiator-iqn     ${initiator-iqn}  
+item --gap -- ------------------------------ Iscsi (chap) --------------------------------
+item setusername             Set IScsi chap username     ${username}                
+item setpassword             Set IScsi chap password     ${password}               
+item --gap -- ------------------------------ Networking   --------------------------------
+item setinterface            Set interface               ${ifname}
+item setmac                  Set mac                     ${mac}
+item setip                   Set ip                      ${ip}
+item setnetmask              Set netmask                 ${netmask}
+item setgateway              Set gateway                 ${gateway}
+item setdns                  Set dns                     ${dns}
+item setdomain               Set domain                  ${domain}
+item setdebugparam           Set debugparameters        
+item applynetworkin          APPLY CHANGE                
+item bootcustom              Boot actual config
+item --gap -- ------------------------------ system   --------------------------------
+item --key b prametri	[b] Configura parametri
+item --key c config	[c] Configure settings
+item --key s shell	[s] Enter iPXE shell
+isset ${legacy} && item --key l local	[l] Boot from local disk || ###
+item --key r reboot	[r] Restart
+item --key p poweroff	[p] Power Off
+item --key e exit	[e] Exit (boot local disk)
+item	back			Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+:applynetworkin
+ifclose ${ifname}
+set ${ifname}/mac ${mac} 
+ifopen ${ifname}
+goto start
+
+###########################################################################
+:bootcustom
+menu bootcustom 
+item --gap -- ------------------------------ Iscsi server --------------------------------
+item --gap ${space}IScsi server ip     ${space} ${serverip}       
+item --gap ${space}IScsi server Name   ${space} ${servername}     
+item --gap ${space}IScsi protocol      ${space} ${iscsiprotocol}  
+item --gap ${space}IScsi port          ${space} ${iscsiport}      
+item --gap ${space}IScsi bootlun       ${space} ${iscsibootlun}   
+item --gap ${space}IScsi target-iqn    ${space} ${targetiqn}      
+item --gap ${space}IScsi target name   ${space} ${targetname}     
+item --gap -- ------------------------------ Iscsi client --------------------------------
+item --gap ${space}IScsi initiator-iqn     ${initiator-iqn}  
+item --gap -- ------------------------------ Iscsi (chap) --------------------------------
+item --gap ${space} IScsi chap username ${space}    ${username}                
+item --gap ${space} IScsi chap password ${space}     ${password}               
+item --gap -- ------------------------------ Networking   --------------------------------
+item --gap ${space} interface  ${space} ${ifname}
+item --gap ${space} mac        ${space} ${mac}
+item --gap ${space} ip         ${space} ${ip}
+item --gap ${space} netmask    ${space} ${netmask}
+item --gap ${space} gateway    ${space} ${gateway}
+item --gap ${space} dns        ${space} ${dns}
+item --gap ${space} domain     ${space} ${domain}
+item --gap ${space} ${root-path}
+item startbootsancustom  ${space} START BOOT SANCUSTOM 
+item --gap -- ------------------------------ system   --------------------------------
+item --key b prametri	[b] Configura parametri
+item --key c config	[c] Configure settings
+item --key s shell	[s] Enter iPXE shell
+isset ${legacy} && item --key l local	[l] Boot from local disk || ###
+item --key r reboot	[r] Restart
+item --key p poweroff	[p] Power Off
+item --key e exit	[e] Exit (boot local disk)
+item	back			Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+set us
+:startbootsancustom
+ifclose ${ifname}
+set ${ifname}/mac 
+ifopen ${ifname}
+set ${ifname}/ip 
+set ${ifname}/netmask 
+set ${ifname}/gateway 
+set dns ${dns}
+set domain ${doain}
+set username ${username}
+set password ${password}
+set initiator-iqn ${initiator-iqn}
+set root-path ${root-path}
+login
+sanboot ${root-path}  ||  goto start
+boot || goto start
+
+
+:settargetiqn 
+set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname}
+set root-path ${iscsirootpath}
+menu Target iqn ${root-path}
+
+item --gap -- ------------------------------ Iscsi target base  --------------------------------
+item setiqnsynology              Set iqn.2000-01.com.synology
+item setiqnqnap		             Set iqn.2004-04.com.qnap
+item setiqnwindows               Set iqn.1991-05.com.microsoft
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto parametri
+
+###########################################################################
+
+:setiscsi-initiator-iqn 
+menu Client iqn ${initiator-iqn}
+item --gap -- ------------------------------ Iscsi clieniqn  --------------------------------
+item setclientiqn-windows10             Set Client iqn iqn.1991-05.com.microsoft:windows10iscsi
+item setclientiqn-hp1000                Set Client iqn iqn.1994-05.com.windows:iscsiboot
+item setclientiqn-debian                Set Client iqn iqn.1993-08.org.debian:01:bf6932b26872
+item setclientiqn-linux                 Set Client iqn iqn.1993-08.org.debian:01:1751bbbcf33
+item setclientiqn-manual                Set Client iqn manual
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto parametri
+
+
+
+:setiqnsynology            set targetiqn     iqn.2000-01.com.synology                       && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setiqnqnap                set targetiqn     iqn.2004-04.com.qnap                           && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setiqnwindows	            set targetiqn     iqn.1991-05.com.microsoft                      && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setclientiqn-hp1000       set initiator-iqn iqn.1994-05.com.windows:iscsiboot              && goto parametri 
+:setclientiqn-debian       set initiator-iqn iqn.1993-08.org.debian:01:bf6932b26872         && goto parametri 
+:setclientiqn-linux        set initiator-iqn iqn.1993-08.org.debian:01:1751bbbcf33          && goto parametri 
+:setclientiqn-windows10    set initiator-iqn iqn.1991-05.com.microsoft:windows10iscsi 	     && set serverip 192.168.99.27 && set iscsiprotocol tcp && set iscsiport 3260 && set iscsibootlun 1 && set targetiqn iqn.2000-01.com.synology && set targetname nas.windows10  && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setclientiqn-manual       echo -n Insert Initiator-iqn  [ ${initiator-iqn} ]       && read initiator-iqn         && goto parametri  
+:settargetname             echo -n Insert Targetname     [ ${targetname}    ]       && read targetname            && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setserverip               echo -n Insert Serverip       [ ${serverip}      ]       && read serverip              && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setservername             echo -n Insert Servername     [ ${servername}    ]       && read servename             && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setiscsiprotocol          echo -n Insert Iscsiprotocol  [ ${iscsiprotocol} ]       && read iscsiprotocol         && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setiscsiport              echo -n Insert Iscsiport      [ ${iscsiport}     ]       && read iscsiport             && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setiscsibootlun           echo -n Insert Iscsibootlun   [ ${iscsibootlun}  ]       && read iscsibootlun          && set iscsirootpath iscsi:${serverip}:${iscsiprotocol}:${iscsiport}:${iscsibootlun}:${targetiqn}:${targetname} && goto parametri
+:setusername               echo -n Insert Username       [ ${username}      ]       && read username              && goto parametri
+:setpassword               echo -n Insert Password       [ ${password}      ]       && read password              && goto parametri
+:setinterface              echo -n Insert Interface      [ ${interface}     ]       && read interface             && goto parametri
+:setmac                    echo -n Insert Mac            [ ${mac}           ]       && read mac                   && ifclose ${ifname} && set ${ifname}/mac ${mac}  && ifopen ${ifname} && goto parametri
+:setip                     echo -n Insert Ip             [ ${ip}            ]       && read ip                    && set ${ifname}/ip        ${ip}         &&  goto parametri
+:setnetmask                echo -n Insert Netmask        [ ${netmask}       ]       && read netmask               && set ${ifname}/netmask   ${netmask}    &&  goto parametri
+:setgateway                echo -n Insert Gateway        [ ${gateway}       ]       && read gateway               && set ${ifname}/gateway   ${gateway}    &&  goto parametri
+:setdns                    echo -n Insert Dns            [ ${dns}           ]       && read dns                   && set ${ifname}/dns       ${dns}        &&  goto parametri
+:setdomain                 echo -n Insert Domain         [ ${domain}        ]       && read domain                && set ${ifname}/domain    ${domain}     &&  goto parametri
+
+:setdebugparam
+set serverip           192.168.99.27
+set servername         nas
+set iscsiprotocol      tcp
+set iscsiport          3260
+set iscsibootlun       1
+set targetiqn          iqn.2000-01.com.synology
+set targetname         nas:linux
+set domain             fritz.box
+set username           iscsiuser
+set password           iscsiuserpasswd
+set iscsi-initiator-iqn iqn.1993-08.org.debian:01:bf6932b26872
+goto parametri
+
+:specialpack
+menu Special Pack
+### add new menu for Special Pack, dont edit this line
+item	back			Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+### add new menu content for Special Pack, dont edit this line
+################################ End specialpack
+
+################################ Start antivirus
+:antivirus
+menu Antivirus
+### add new menu for Antivirus, dont edit this line
+item	back			Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+### add new menu content for Antivirus, dont edit this line
+################################ End antivirus
+
+################################ Start diskutilities
+:diskutilities
+menu Disk Utilities
+### add new menu for Disk Utilities, dont edit this line
+item back Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+### add new menu content for Disk Utilities, dont edit this line
+################################ End diskutilities
+
+################################ Start backuprecovery
+:backuprecovery
+menu Backup & Recovery
+### add new menu for Backup & Recovery, dont edit this line
+item back Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+### add new menu content for Backup & Recovery, dont edit this line
+################################ End backuprecovery
+
+################################# Start dosprogs
+:dosprogs
+menu DOS Programs
+### add new menu for DOS Program, dont edit this line
+item back Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+### add new menu content for DOS Program, dont edit this line
+################################# End dosprogs
+
+################################# Start winpe
+:winpe
+menu WinPE & Setup
+isset ${efi-32} || item boot HBCD
+isset ${efi-32} || item HBCD_PE_x64 HBCD_PE_x64
+### add new menu for WinPE, dont edit this line
+item back Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+### Start boot
+:boot
+set path_file /Files/WinPE/boot/boot.wim
+kernel ${boot-url}/Tools/MS/PXE/wimboot.${arch2}					rawbcd
+initrd ${boot-url}/Tools/MS/PXE/aioboot.pxe							aioboot.pxe
+initrd ${boot-url}/networkpath.txt									networkpath.txt
+initrd ${boot-url}/Tools/MS/PXE/boot/fonts/segmono_boot.ttf			segmono_boot.ttf
+initrd ${boot-url}/Tools/MS/PXE/boot/fonts/segoe_slboot.ttf			segoe_slboot.ttf
+initrd ${boot-url}/Tools/MS/PXE/boot/fonts/segoen_slboot.ttf		segoen_slboot.ttf
+initrd ${boot-url}/Tools/MS/PXE/boot/fonts/wgl4_boot.ttf			wgl4_boot.ttf
+isset ${legacy} && initrd ${boot-url}/Tools/MS/PXE/bootmgr			bootmgr || ###
+isset ${legacy} && initrd ${boot-url}/Tools/MS/PXE/bootmgr.exe		bootmgr.exe || initrd ${boot-url}/Tools/MS/PXE/${arch2}/bootmgr.efi
+isset ${legacy} && initrd ${boot-url}/Tools/MS/PXE/boot/bcd			BCD || initrd ${boot-url}/Tools/MS/PXE/efi/microsoft/boot/bcd		BCD
+initrd ${boot-url}/Tools/MS/boot.sdi								boot.sdi
+initrd ${boot-url}${path_file}										boot.wim
+boot || goto failed
+goto start
+### End boot
+### Start HBCD_PE_x64
+:HBCD_PE_x64
+set path_file /Files/WinPE/HBCD_PE_x64/boot.wim
+kernel ${boot-url}/Tools/MS/${arch2}/wimboot	rawbcd
+initrd ${boot-url}/networkpath.txt	networkpath.txt
+isset  ${legacy} && initrd ${boot-url}/Tools/MS/bootmgr.exe	bootmgr.exe || initrd ${boot-url}/Tools/MS/${arch2}/bootmgfw.efi
+initrd ${boot-url}/Tools/MS/${platform}/bcd	BCD
+initrd ${boot-url}/Tools/MS/boot.sdi	boot.sdi
+initrd ${boot-url}${path_file}	boot.wim
+boot || goto failed
+goto start
+### End HBCD_PE_x64
+### add new menu content for WinPE, dont edit this line
+################################# End winpe
+
+################################# Start livelinux
+:livelinux
+menu	Linux OS
+item ubuntu2204 ubuntu2204
+### add new menu for Linux OS, dont edit this line
+item	back				Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+### Start ubuntu2204
+:ubuntu2204
+set path_file /Files/Linux/ubuntu2204
+set nfspath   /Files/Linux/ubuntu2204
+kernel ${boot-url}${path_file}/casper/vmlinuz root=/dev/nfs boot=casper ip=dhcp netboot=nfs nfsroot=${nfs-server}:${nsf-mount}${nfspath} initrd=initrd || goto failed
+initrd ${boot-url}${path_file}/casper/initrd || goto failed
+boot || goto failed
+goto start
+### End ubuntu2204
+### add new menu content for Linux OS, dont edit this line
+################################# End livelinux
+
+################################# Begin My Functions
+:wimboot
+kernel ${boot-url}/AIO/Tools/MS/PXE/wimboot.${arch2}		rawbcd
+initrd ${boot-url}/AIO/Tools/MS/PXE/boot/fonts/segmono_boot.ttf		segmono_boot.ttf
+initrd ${boot-url}/AIO/Tools/MS/PXE/boot/fonts/segoe_slboot.ttf		segoe_slboot.ttf
+initrd ${boot-url}/AIO/Tools/MS/PXE/boot/fonts/segoen_slboot.ttf		segoen_slboot.ttf
+initrd ${boot-url}/AIO/Tools/MS/PXE/boot/fonts/wgl4_boot.ttf		wgl4_boot.ttf
+isset ${legacy} && initrd ${boot-url}/AIO/Tools/MS/PXE/bootmgr		bootmgr || ###
+isset ${legacy} && initrd ${boot-url}/AIO/Tools/MS/PXE/bootmgr.exe		bootmgr.exe || initrd ${boot-url}/AIO/Tools/MS/PXE/${arch2}/bootmgr.efi
+isset ${legacy} && initrd ${boot-url}/AIO/Tools/MS/PXE/boot/bcd		BCD || initrd ${boot-url}/AIO/Tools/MS/PXE/efi/microsoft/boot/bcd	BCD
+initrd ${boot-url}/AIO/Tools/MS/boot.sdi		boot.sdi
+initrd ${boot-url}${wimfile}		boot.wim
+boot || goto failed
+goto start
+:netboot
+menu netboot
+item --gap -- ------------------------------ netboot   --------------------------------
+item windows10        windos10x642004
+item debianiscsi      Debian iscsi nas:debian 
+item linuxiscsi	      Debian Iscsi nas:linux   static
+item sanbootboot      San-boot
+item nfsboot	      Nfs-boot
+item httpboot	      Http-boot          
+item --gap -- ------------------------------ system   --------------------------------
+item --key b prametri	[b] Configura parametri
+item --key c config	[c] Configure settings
+item --key s shell	[s] Enter iPXE shell
+isset ${legacy} && item --key l local	[l] Boot from local disk || ###
+item --key r reboot	[r] Restart
+item --key p poweroff	[p] Power Off
+item --key e exit	[e] Exit (boot local disk)
+item	back			Back to top menu...
+iseq ${menu-default} menu-recovery && isset ${submenu-default} && goto menu-recovery-timed ||
+choose selected && goto ${selected} || goto start
+:menu-recovery-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start
+
+
+:linuxiscsi
+ifclose net0
+set net0/mac 00:0C:29:3B:EE:73
+ifopen net0
+set net0/ip 192.168.99.110
+set net0/netmask 255.255.255.0
+set net0/gateway 192.168.99.1
+set dns 192.168.99.1
+set domain fritz.box
+set username iscsiuser
+set password iscsiuserpasswd
+set iscsi-initiator-iqn iqn.1993-08.org.debian:01:bf6932b26872
+set root-path-linux   iscsi:192.168.99.27:tcp:3260:1:iqn.2000-01.com.synology:nas.linux
+set root-path ${root-path-linux}
+login
+sanboot ${root-path}  ||  goto start
+boot || goto start
+
+:debianiscsi
+set username iscsiuser
+set password iscsiuserpasswd
+set iscsi-initiator-iqn     iqn.2016-04.com.open-iscsi:9086519b9ae3
+set root-path-linux         iscsi:192.168.99.27:tcp:3260:1:iqn.2000-01.com.synology:nas.debian
+set root-path ${root-path-linux}
+login
+sanboot ${root-path}  ||  goto start
+boot || goto start
+
+:windows10
+set iscsi-initiator-iqn     iqn.1991-05.com.microsoft:windows10iscsi
+set root-path               iscsi:192.168.99.27:tcp:3260:1:iqn.2000-01.com.synology:nas.windows10
+set root-path 
+sanboot ${root-path}  ||  goto start
+boot || goto start
+
+
+
+
+### Start iscsiboot
+:iscsiboot
+dhcp net0
+set keep-san 1
+echo 
+sanboot ${syno-root-path1} || sanboot ${syno-root-path4} || sanboot ${syno-root-path} ||  goto start
+#sanboot ${root-path}  || sanboot ${syno-root-path1} || sanboot ${syno-root-path2} || sanboot ${syno-root-path3} || sanboot ${syno-root-path4} || sanboot ${qnap-root-path} || sanboot ${win-root-path} || sanboot ${win-root-path2}  ||  goto failed
+boot || goto start
+### End iscsiboot
+
+### Start nftboot
+:nfsboot
+dhcp net0
+set keep-san 1
+sanboot ${root-path}  || sanboot ${syno-root-path1} || sanboot ${syno-root-path2} || sanboot ${syno-root-path3} || sanboot ${syno-root-path4} || sanboot ${qnap-root-path} || sanboot ${win-root-path} || sanboot ${win-root-path2}  ||  goto failed
+boot || goto failed
+goto start
+### End nfsboot
+
+### Start httpboot
+:httpboot
+dhcp net0
+set keep-san 1
+set initiator-iqn 
+sanboot ${root-path}  ||  sanboot ${syno-root-path1} || sanboot ${syno-root-path2} || sanboot ${syno-root-path3} || sanboot ${syno-root-path4} || sanboot ${qnap-root-path} || sanboot ${win-root-path} || sanboot ${win-root-path2}  ||  goto failed
+boot || goto failed
+goto start
+### End httpboot
+##########end netboot 
+  
+#Memdisk via iPXE vs. ISO Boot HTTP via iPXE:
+#
+#Memdisk via iPXE does the following things: 
+#1) Emulates a CD-ROM allowing a Network-Based Install. 
+#2) Masks actual system RAM because the environment memdisk creates "hides" a certain amount of RAM to allow for the ISO - This amount is generally 2x ISO Size (Maximum 2GB - I think).
+#3) Preloads the ISO into memory before executing the ISO. This slows boot time a bit.
+#
+#ISO Boot over HTTP via iPXE:
+#1) Does not emulate a CD-ROM. It is a Block Device.
+#2) Does not mask system RAM.
+#3) Executes as it reads: Faster than memdisk and no "preloading" of the ISO is required.
+#4) Does not hold the ISO as a readable device once the ISO is loaded unless loaded into the iBFT.
